@@ -1,4 +1,4 @@
-FROM archlinux/base
+FROM archlinux:base
 
 WORKDIR /usr/src/app
 
@@ -27,17 +27,21 @@ RUN echo -e "y\ny\ny\ny\ny\ny\ny\n" | /opt/android-sdk/tools/bin/sdkmanager --li
     /opt/android-sdk/tools/bin/sdkmanager --install "platform-tools" "platforms;android-29" "build-tools;29.0.2" "ndk-bundle"
 
 # Qt
-ARG QTVERS=5.15.0
+ARG QTVERS=5.15.2
+
+COPY qtbase-${QTVERS}-gcc11.patch .
 
 RUN curl -O -L https://download.qt.io/official_releases/qt/${QTVERS%.*}/${QTVERS}/single/qt-everywhere-src-${QTVERS}.tar.xz && \
     tar xJf qt-everywhere-src-${QTVERS}.tar.xz && \
 
     # https://doc.qt.io/qt-5/android-openssl-support.html
-    git clone https://github.com/KDAB/android_openssl && \
+    git clone --depth=1 https://github.com/KDAB/android_openssl && \
 
     # Compile and install Qt for Android
-    cd qt-everywhere-src-${QTVERS} && \
-    ./configure -confirm-license -opensource -xplatform android-clang --disable-rpath -nomake tests -nomake examples -android-ndk /opt/android-sdk/ndk-bundle/ -android-sdk /opt/android-sdk/ -no-warnings-are-errors -skip qtserialport -skip qtwebengine -openssl-runtime -I/usr/src/app/android_openssl/static/include/ -android-abis armeabi-v7a -recheck-all && \
+    cd qt-everywhere-src-${QTVERS}/qtbase && \
+    patch -p1 < ../../qtbase-${QTVERS}-gcc11.patch && \
+    cd .. && \
+    ./configure -confirm-license -opensource -xplatform android-clang --disable-rpath -nomake tests -nomake examples -android-ndk /opt/android-sdk/ndk-bundle/ -android-sdk /opt/android-sdk/ -no-warnings-are-errors -skip qtserialport -skip qtwebengine -openssl-runtime -I/usr/src/app/android_openssl/static/include/ -android-abis armeabi-v7a,arm64-v8a -recheck-all && \
     make -j$(nproc) && \
     make -j$(nproc) install && \
 
@@ -52,6 +56,6 @@ COPY helloworld.* helloworld/
 
 RUN cd helloworld && \
     qmake && \
-    make -j$(nproc) apk && \
+    make aab && \
     make distclean && \
-    rm -rf android-build armeabi-v7a *.json
+    rm -rf android-* armeabi-v7a arm64-v8a
